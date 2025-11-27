@@ -34,9 +34,36 @@ class ClinicaAdmin(admin.ModelAdmin):
             return ('nome', 'cep', 'localidade', 'uf')
         return ('nome', 'cep', 'localidade', 'uf')
     
+from django.contrib import admin
+from .models import Clinica, Parametro  # certifique-se de importar os dois
+
+# ... (o ClinicaAdmin que já fizemos antes fica aqui em cima)
+
 @admin.register(Parametro)
 class ParametroAdmin(admin.ModelAdmin):
-    list_display = ('clinica', 'codigo', 'valor', 'descricao')
-    list_filter = ('clinica', 'codigo',)
-    search_fields = ('clinica', 'codigo',)    
+    list_display = ('clinica', 'codigo', 'valor')
+    search_fields = ('codigo', 'valor', 'clinica__nome')
+    list_filter = ('clinica',)
 
+    # Esconde o campo user (caso ainda exista no banco)
+    def get_fields(self, request, obj=None):
+        fields = super().get_fields(request, obj)
+        if 'user' in fields:
+            fields.remove('user')
+        return fields
+
+    # Filtra clínicas no dropdown
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == "clinica":
+            if request.user.is_superuser:
+                kwargs["queryset"] = Clinica.objects.all()
+            else:
+                kwargs["queryset"] = Clinica.objects.filter(user=request.user)
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+    # Filtra listagem
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        if request.user.is_superuser:
+            return qs
+        return qs.filter(clinica__user=request.user)

@@ -102,26 +102,24 @@ class Clinica(models.Model):
         }
 
 class Parametro(models.Model):
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name='parametros'  # opcional
-    )
     clinica = models.ForeignKey(
         Clinica,
-        on_delete=models.SET_NULL,
-        related_name='parametros',
-        null=True,
-        blank=True
+        on_delete=models.CASCADE,
+        related_name='parametros'
     )
-    codigo = UpperCharField(max_length=16, blank=False, null=False, unique=True)
-    valor = models.FloatField()  # Armazena como string, converte no uso
-    descricao = UpperCharField(max_length=128, null=True, blank=True)
-
-    class Meta:
-        db_table = 'parametros'
-        verbose_name = 'Parâmetro'
-        verbose_name_plural = 'Parâmetros'
+    codigo = UpperCharField("codigo", max_length=16)  # ← sem unique=True aqui!
+    valor = models.CharField("Valor", max_length=200)
+    descricao = UpperCharField("Descrição", max_length=128, blank=True, null=True)
 
     def __str__(self):
-        return f'{self.codigo} = {self.valor} = {self.descricao}'
+        return f"{self.codigo} - {self.clinica.nome}"
+
+    class Meta:
+        verbose_name = "Parâmetro"
+        verbose_name_plural = "Parâmetros"
+        # ← ÚNICO POR CLÍNICA, não global!
+        unique_together = ('clinica', 'codigo')
+        # ou, se estiver usando Django 4.0+:
+        # constraints = [
+        #     models.UniqueConstraint(fields=['clinica', 'codigo'], name='unique_codigo_per_clinica')
+        # ]
