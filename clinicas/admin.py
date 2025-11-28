@@ -41,9 +41,71 @@ from .models import Clinica, Parametro  # certifique-se de importar os dois
 
 @admin.register(Parametro)
 class ParametroAdmin(admin.ModelAdmin):
-    list_display = ('clinica', 'codigo', 'valor')
-    search_fields = ('codigo', 'valor', 'clinica__nome')
+    list_display = ('codigo', 'valor', 'nome_clinica', 'localidade', 'uf')
+    search_fields = ('clinica__nome', 'codigo', 'valor')
+    list_filter = ('clinica__nome',)
+
+    # ← Métodos mágicos que deixam o título bonitinho
+    def nome_clinica(self, obj):
+        return obj.clinica.nome
+    nome_clinica.short_description = "Clínica"  # ← Aqui muda o título da coluna!
+    nome_clinica.admin_order_field = 'clinica__nome'  # permite ordenar clicando
+
+    def localidade(self, obj):
+        return obj.clinica.localidade
+    localidade.short_description = "Cidade"
+
+    def uf(self, obj):
+        return obj.clinica.uf
+    uf.short_description = "UF"
+
+    # Esconde o campo user (caso ainda exista no banco)
+    def get_fields(self, request, obj=None):
+        fields = super().get_fields(request, obj)
+        if 'user' in fields:
+            fields.remove('user')
+        return fields
+
+    # Filtra clínicas no dropdown
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == "clinica":
+            if request.user.is_superuser:
+                kwargs["queryset"] = Clinica.objects.all()
+            else:
+                kwargs["queryset"] = Clinica.objects.filter(user=request.user)
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+    # Filtra listagem
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        if request.user.is_superuser:
+            return qs
+        return qs.filter(clinica__user=request.user)
+
+#-------------------------
+@admin.register(Categoria)
+#-------------------------
+class CategoriaAdmin(admin.ModelAdmin):
+    list_display = ('codigo', 'descricao', 'nome_clinica', 'localidade', 'uf')
+    search_fields = ('codigo', 'clinica__nome')
     list_filter = ('clinica',)
+
+    # ← Métodos mágicos que deixam o título bonitinho
+    def nome_clinica(self, obj):
+        return obj.clinica.nome
+    nome_clinica.short_description = "Clínica"  # ← Aqui muda o título da coluna!
+    nome_clinica.admin_order_field = 'clinica__nome'  # permite ordenar clicando
+
+    def localidade(self, obj):
+        return obj.clinica.localidade
+    localidade.short_description = "Cidade"
+
+    def uf(self, obj):
+        return obj.clinica.uf
+    uf.short_description = "UF"
+
+
+
 
     # Esconde o campo user (caso ainda exista no banco)
     def get_fields(self, request, obj=None):

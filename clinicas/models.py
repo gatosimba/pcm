@@ -50,11 +50,11 @@ class Clinica(models.Model):
         verbose_name_plural = 'Clínicas'
 
     def __str__(self):
-        return f'Clínica {self.nome}'
+        return f'{self.nome}'
 
 #-- Buscar o CEP para preenchimento do endereço
     def save(self, *args, **kwargs):
-        print(f"Salvando o objeto: {self.nome}")
+        #print(f"Salvando o objeto: {self.nome}")
 
         url = f"https://viacep.com.br/ws/{self.cep}/json/"
 
@@ -81,7 +81,7 @@ class Clinica(models.Model):
         self.uf = data.get("uf", "")
 
         super().save(*args, **kwargs)  # Chama o save original
-        print(f"Objeto salvo com ID: {self.id}")
+        #print(f"Objeto salvo com ID: {self.id}")
 #-----------------------------------------------
 
     def to_dict(self):
@@ -100,14 +100,16 @@ class Clinica(models.Model):
             'data_criacao': self.data_criacao.isoformat() if self.data_criacao else None,
             'data_atualizacao': self.data_atualizacao.isoformat() if self.data_atualizacao else None,
         }
-
+#-----------------------------
 class Parametro(models.Model):
+#-----------------------------
+#     
     clinica = models.ForeignKey(
         Clinica,
         on_delete=models.CASCADE,
         related_name='parametros'
     )
-    codigo = UpperCharField("codigo", max_length=16)  # ← sem unique=True aqui!
+    codigo = UpperCharField("Código", max_length=16)  # ← sem unique=True aqui!
     valor = models.CharField("Valor", max_length=200)
     descricao = UpperCharField("Descrição", max_length=128, blank=True, null=True)
 
@@ -123,3 +125,36 @@ class Parametro(models.Model):
         # constraints = [
         #     models.UniqueConstraint(fields=['clinica', 'codigo'], name='unique_codigo_per_clinica')
         # ]
+#-----------------------------
+class Categoria(models.Model):
+#-----------------------------    
+    TIPO_CHOICES = [
+        ('procedimento', 'Procedimento'),
+        ('custo', 'Custo'),
+    ]
+    clinica = models.ForeignKey(
+        Clinica,
+        on_delete=models.CASCADE,
+        related_name='categorias'
+    )
+#    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='operador')
+    codigo = UpperCharField('Código', max_length=16, blank=False, null=False)
+    descricao = UpperCharField('Descrição', max_length=128, blank=False, null=False)
+    tipo = models.CharField('Tipo', max_length=20, choices=TIPO_CHOICES, blank=False, null=False)
+
+    class Meta:
+        db_table = 'categorias'
+        verbose_name = 'Categoria'
+        verbose_name_plural = 'Categorias'
+        unique_together = ('clinica', 'codigo')
+
+    def __str__(self):
+        return f'{self.codigo} {self.descricao} ({self.get_tipo_display()})'
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'nome': self.codigo,
+            'descricao': self.descricao,
+            'tipo': self.tipo,
+        }
