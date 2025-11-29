@@ -32,15 +32,14 @@ class Clinica(models.Model):
         on_delete=models.CASCADE,
         related_name='clinicas'   # importante!
     )
-    nome = UpperCharField(max_length=64, blank=False, null=False, unique=True)
-    cep  = models.CharField(max_length=9, blank=True, null=True)
-    logradouro = UpperCharField(max_length=64, blank=True, null=True)
-    complemento = UpperCharField(max_length=32, blank=True, null=True)
-    bairro = UpperCharField(max_length=64, blank=True, null=True)
-    localidade = UpperCharField(max_length=64, blank=True, null=True)
-    uf = UpperCharField(max_length=2, blank=True, null=True)
-
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='ativa')
+    nome = UpperCharField('Clínica',max_length=64, blank=False, null=False, unique=True)
+    cep  = models.CharField('CEP' ,max_length=9, blank=True, null=True)
+    logradouro = UpperCharField('Logradouro',max_length=64, blank=True, null=True)
+    complemento = UpperCharField('Complemento', max_length=32, blank=True, null=True)
+    bairro = UpperCharField('Bairro', max_length=64, blank=True, null=True)
+    localidade = UpperCharField('Cidade', max_length=64, blank=True, null=True)
+    uf = UpperCharField('Estado',max_length=2, blank=True, null=True)
+    status = models.CharField('Status', max_length=20, choices=STATUS_CHOICES, default='ativa')
     data_criacao = models.DateTimeField(default=timezone.now)
     data_atualizacao = models.DateTimeField(auto_now=True)
 
@@ -50,7 +49,7 @@ class Clinica(models.Model):
         verbose_name_plural = 'Clínicas'
 
     def __str__(self):
-        return f'{self.nome}'
+        return f'{self.nome},{self.status}'
 
 #-- Buscar o CEP para preenchimento do endereço
     def save(self, *args, **kwargs):
@@ -95,7 +94,6 @@ class Clinica(models.Model):
             'bairro': self.bairro,
             'localidade': self.localidade,
             'uf': self.uf,
-
             'status': self.status,
             'data_criacao': self.data_criacao.isoformat() if self.data_criacao else None,
             'data_atualizacao': self.data_atualizacao.isoformat() if self.data_atualizacao else None,
@@ -139,7 +137,7 @@ class Categoria(models.Model):
     )
 #    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='operador')
     codigo = UpperCharField('Código', max_length=16, blank=False, null=False)
-    descricao = UpperCharField('Descrição', max_length=128, blank=False, null=False)
+    descricao = UpperCharField('Descrição', max_length=128, blank=True, null=True)
     tipo = models.CharField('Tipo', max_length=20, choices=TIPO_CHOICES, blank=False, null=False)
 
     class Meta:
@@ -154,7 +152,42 @@ class Categoria(models.Model):
     def to_dict(self):
         return {
             'id': self.id,
-            'nome': self.codigo,
+            'codigo': self.codigo,
             'descricao': self.descricao,
             'tipo': self.tipo,
+        }
+#----------------------------
+class TipoSala(models.Model):
+#----------------------------
+    STATUS_CHOICES = [
+        ('ativa', 'Ativa'),
+        ('inativa', 'Inativa'),
+    ]
+
+    clinica = models.ForeignKey(
+        Clinica,
+        on_delete=models.CASCADE,
+        related_name='tipossala'
+    )
+    tipo       = UpperCharField('Tipo', max_length=16, blank=False, null=False)    
+    nome       = UpperCharField('Nome Sala', max_length=64, blank=False, null=False)
+    observacao = UpperCharField('Observação', max_length=128, blank=True, null=True)
+    status     = models.CharField('Status', max_length=20, choices=STATUS_CHOICES, default='ativa')
+    
+    class Meta:
+        db_table = 'tipossala'
+        verbose_name = 'Tipo de Sala'
+        verbose_name_plural = 'Tipos de Sala'
+        unique_together = ('clinica', 'tipo')
+
+    def __str__(self):
+        return f'{self.tipo},{self.nome},{self.status}'
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'tipo':self.tipo,
+            'nome': self.nome,
+            'status':self.status,
+            'observacao': self.observacao,
         }
