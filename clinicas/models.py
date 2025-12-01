@@ -49,7 +49,7 @@ class Clinica(models.Model):
         verbose_name_plural = 'Clínicas'
 
     def __str__(self):
-        return f'{self.nome},{self.status}'
+        return f'{self.nome}'
 
 #-- Buscar o CEP para preenchimento do endereço
     def save(self, *args, **kwargs):
@@ -108,7 +108,7 @@ class Parametro(models.Model):
         related_name='parametros'
     )
     codigo = UpperCharField("Código", max_length=16)  # ← sem unique=True aqui!
-    valor = models.CharField("Valor", max_length=200)
+    valor = models.CharField("Valor", max_length=32)
     descricao = UpperCharField("Descrição", max_length=128, blank=True, null=True)
 
     def __str__(self):
@@ -123,6 +123,16 @@ class Parametro(models.Model):
         # constraints = [
         #     models.UniqueConstraint(fields=['clinica', 'codigo'], name='unique_codigo_per_clinica')
         # ]
+# No model Parametro, adiciona esse método:
+    @classmethod
+    def get_int(cls, codigo, default=0):
+        valor = cls.get_valor(codigo, default=str(default))
+        try:
+            return int(float(valor))  # aceita "22", "22.0", 22, 22.0
+        except:
+            return int(default) if str(default).isdigit() else 0
+
+
 #-----------------------------
 class Categoria(models.Model):
 #-----------------------------    
@@ -181,7 +191,7 @@ class TipoSala(models.Model):
         unique_together = ('clinica', 'tipo')
 
     def __str__(self):
-        return f'{self.tipo},{self.nome},{self.status}'
+        return f'{self.tipo}'
 
     def to_dict(self):
         return {
@@ -245,42 +255,113 @@ class Equipamento(models.Model):
         }
     
 #------------------------
+# ===== SALA =====
 class Sala(models.Model):
-#------------------------
-#     
+
+    STATUS_CHOICES = [
+        ('ativa', 'Ativa'),
+        ('inativa', 'Inativa'),
+    ]
     clinica = models.ForeignKey(
         Clinica,
         on_delete=models.CASCADE,
-        related_name='salas'
+        related_name='salas'  # ← esse pode ficar "salas"
     )
-    numero = models.CharField("Número/Nome da Sala", max_length=20)
-    descricao = models.CharField("Descrição", max_length=100, blank=True)
-    cor = models.CharField(
-        "Cor no Agendamento",
-        max_length=7,
-        default="#007bff",
-        help_text="Cor em formato HEX (ex: #ff0000 para vermelho)"
+    tipo = models.ForeignKey(
+        TipoSala,
+        on_delete=models.CASCADE,
+        null=True,
+        related_name='salas'  # ← esse pode ficar "salas"
     )
-    ativa = models.BooleanField("Ativa?", default=True)
 
-    # ← AQUI É O PODER: vários equipamentos!
+    numero = UpperCharField("Nro Sala", max_length=20)
+    nome = UpperCharField("Nome Sala", max_length=100, blank=True, null=True)
+    cor = UpperCharField("Cor no Agendamento", max_length=7, default="#007bff")
+    status = models.CharField('Status', max_length=20, choices=STATUS_CHOICES, default='ativa')
+
     equipamentos = models.ManyToManyField(
         Equipamento,
-        related_name='salas',
-        blank=True,
-        help_text="Selecione os equipamentos que ficam nesta sala"
+        related_name='salas_equipamentos',  # ← mudou aqui pra não conflitar
+        blank=True
     )
 
     class Meta:
-        verbose_name = "Sala"
-        verbose_name_plural = "Salas"
         unique_together = ('clinica', 'numero')
-        ordering = ['numero']
 
     def __str__(self):
         return f"Sala {self.numero} - {self.clinica.nome}"
 
-    def get_cor_display(self):
-        return f'<span style="color:{self.cor}">■</span> {self.cor}'
-    get_cor_display.allow_tags = True
-    get_cor_display.short_description = "Cor"    
+# === Dentro do model Sala ===
+# === NO models.py → dentro da class Sala ===
+
+    def calcular_custo_hora(self, mes=None, ano=None):
+        from django.utils import timezone
+        from django.db.models import Sum
+
+        agora = timezone.now()
+        mes = mes or agora.month
+        ano = ano or agora.year
+
+        # CONVERTE TUDO PRA INT MESMO SE FOR STRING
+        try:
+            dias = int(float(Parametro.get_valor('DIAS', '22')))
+            horas = int(float(Parametro.get_valor('HORAS', '8')))
+        except:
+            dias = 22
+            horas = 8
+
+        total_horas = max(dias * horas, 1)
+
+        fixo = self.custos_fixos.filter(mes_referencia=mes, ano_referencia=ano)\
+                                .aggregate(s=Sum('valor_mensal'))['s'] or 0
+        var  = self.custos_variaveis.filter(mes_referencia=mes, ano_referencia=ano)\
+                                    .aggregate(s=Sum('valor_mensal'))['s'] or 0
+
+        #print(fixo, ' - ', var, ' - ', total_horas)
+
+        resultado = (fixo + var) / total_horas
+        res = round(float(resultado), 2)
+        #print('Resultado: ', res)
+        return res   # ← TEM QUE RETORNAR SÓ O NÚMERO!
+
+
+# ===== CUSTO FIXO SALA =====
+# Em CustoFixoSala e CustoVariavelSala — REMOVE ESSAS LINHAS:
+# clinica = models.ForeignKey(Clinica, on_delete=models.CASCADE, ...)
+
+from django.core.validators import MinValueValidator, MaxValueValidator
+
+# Deixa só o FK pra Sala:
+class CustoFixoSala(models.Model):
+    sala = models.ForeignKey(Sala, on_delete=models.CASCADE, related_name='custos_fixos')
+    nome_item = UpperCharField(max_length=64)
+    valor_mensal = models.FloatField()
+    mes_referencia = models.PositiveSmallIntegerField()
+    ano_referencia = models.PositiveSmallIntegerField(
+        validators=[
+            MinValueValidator(2000),
+            MaxValueValidator(2100)
+        ]
+    )
+    class Meta:
+        unique_together = ('sala', 'nome_item', 'mes_referencia', 'ano_referencia')
+
+# ===== CUSTO VARIÁVEL SALA =====
+# Em CustoFixoSala e CustoVariavelSala — REMOVE ESSAS LINHAS:
+# clinica = models.ForeignKey(Clinica, on_delete=models.CASCADE, ...)
+
+# Deixa só o FK pra Sala:
+class CustoVariavelSala(models.Model):
+    sala = models.ForeignKey(Sala, on_delete=models.CASCADE, related_name='custos_variaveis')
+    nome_item = UpperCharField(max_length=64)
+    valor_mensal = models.FloatField()
+    mes_referencia = models.PositiveSmallIntegerField()
+    ano_referencia = models.PositiveSmallIntegerField(
+        validators=[
+            MinValueValidator(2000),
+            MaxValueValidator(2100)
+        ]
+    )
+
+    class Meta:
+        unique_together = ('sala', 'nome_item', 'mes_referencia', 'ano_referencia')
