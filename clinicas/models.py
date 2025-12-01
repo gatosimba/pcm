@@ -191,3 +191,96 @@ class TipoSala(models.Model):
             'status':self.status,
             'observacao': self.observacao,
         }
+
+#-------------------------------
+class Equipamento(models.Model):
+#-------------------------------
+    STATUS_CHOICES = [
+        ('ativo', 'Ativo'),
+        ('inativo', 'Inativo'),
+    ]
+
+    clinica = models.ForeignKey(
+        Clinica,
+        on_delete=models.CASCADE,
+        related_name='equipamento'
+    )
+    codigo        = UpperCharField('Codigo', max_length=16, blank=False, null=False)    
+    descricao     = UpperCharField('descricao', max_length=128, blank=False, null=False)
+    fabricante    = UpperCharField('Fabricante', max_length=128, blank=True, null=True)
+    marca         = UpperCharField('Marca', max_length=64, blank=True, null=True)
+    dta_aquisicao = models.DateTimeField('Data Aquisição', blank=True, null=True)
+    vlr_aquisicao = models.FloatField('Valor Aquisição', blank=True, null=True)
+    custo_dia     = models.FloatField('Custo Dia', blank=True, null=True)
+    custo_mes     = models.FloatField('Custo Mes', blank=True, null=True)
+    status        = models.CharField('Status', max_length=20, choices=STATUS_CHOICES, default='ativo')
+    
+    class Meta:
+        db_table = 'equipamento'
+        verbose_name = 'Equipamento'
+        verbose_name_plural = 'Equipamentos'
+        unique_together = ('clinica', 'codigo')
+
+    def __str__(self):
+        return f'{self.codigo},{self.descricao},{self.status}'
+
+#-- No seu model Equipamento, já pode deixar assim (opcional, mas fica lindo no admin):
+    def salas_list(self):
+        return ", ".join([s.numero for s in self.salas.all()])
+    salas_list.short_description = "Usado nas salas"
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'codigo':self.codigo,
+            'descricao': self.descricao,
+            'fabricante': self.fabricante,
+            'marca': self.marca,
+            'dta_aquisicao': self.dta_aquisicao,
+            'vlr_aquisicao': self.vlr_aquisicao,
+            'custo_dia': self.custo_dia,
+            'custo_mes': self.custo_mes,
+            'status':self.status,
+
+        }
+    
+#------------------------
+class Sala(models.Model):
+#------------------------
+#     
+    clinica = models.ForeignKey(
+        Clinica,
+        on_delete=models.CASCADE,
+        related_name='salas'
+    )
+    numero = models.CharField("Número/Nome da Sala", max_length=20)
+    descricao = models.CharField("Descrição", max_length=100, blank=True)
+    cor = models.CharField(
+        "Cor no Agendamento",
+        max_length=7,
+        default="#007bff",
+        help_text="Cor em formato HEX (ex: #ff0000 para vermelho)"
+    )
+    ativa = models.BooleanField("Ativa?", default=True)
+
+    # ← AQUI É O PODER: vários equipamentos!
+    equipamentos = models.ManyToManyField(
+        Equipamento,
+        related_name='salas',
+        blank=True,
+        help_text="Selecione os equipamentos que ficam nesta sala"
+    )
+
+    class Meta:
+        verbose_name = "Sala"
+        verbose_name_plural = "Salas"
+        unique_together = ('clinica', 'numero')
+        ordering = ['numero']
+
+    def __str__(self):
+        return f"Sala {self.numero} - {self.clinica.nome}"
+
+    def get_cor_display(self):
+        return f'<span style="color:{self.cor}">■</span> {self.cor}'
+    get_cor_display.allow_tags = True
+    get_cor_display.short_description = "Cor"    

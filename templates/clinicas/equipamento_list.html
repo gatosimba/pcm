@@ -1,0 +1,31 @@
+{% extends 'admin/base_site.html' %}
+{% block content %}
+<h1>Equipamentos</h1>
+<a href="{% url 'equipamento_add' %}" class="btn btn-primary mb-3">+ Novo Equipamento</a>
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>Código</th>
+            <th>Descrição</th>
+            <th>Fabricante</th>
+            <th>Status</th>
+            <th>Ações</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for eq in equipamentos %}
+        <tr>
+            <td>{{ eq.codigo }}</td>
+            <td>{{ eq.descricao }}</td>
+            <td>{{ eq.fabricante|default:"-" }}</td>
+            <td><span class="badge bg-{% if eq.status == 'ativo' %}success{% else %}danger{% endif %}">{{ eq.get_status_display }}</span></td>
+            <td>
+                <a href="{% url 'equipamento_edit' eq.pk %}" class="btn btn-sm btn-warning">Editar</a>
+            </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5">Nenhum equipamento cadastrado.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}
