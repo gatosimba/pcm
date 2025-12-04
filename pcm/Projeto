@@ -1,0 +1,9 @@
+Bom dia amigo, Sou o Martins e estou precisando de um Help no meu Projeto Django5.
+Criei um projeto PCM - Precificação de Clícas Médicas. Já está com a cara do Admin, com login por email, eu como Superuser, etc...
+Esse projeto será destinado à Consultores que apoiam Clínicas. Por exemplo: Criei um Login para o Marcos email um para a Sandra, ambos Consultores. Ok, o Model principal é Clinica, já criado.
+Apesar de ser programador Python (aposentado há 3 anos rsrsrs) ainda tenho uma certa dificuldade de criar os Admins dos Models.
+Então gostaria de um socorro seu assim: Eu lhe envio um Model e você me retorna o respectivo Admin.
+Eu testo aqui (dando permissão nas tabelas e logando no Marcos e Sandra para cadastrar as Clinicas) e assim por diante vou te enviando um Model por vez.
+O pulo do gato rsrsrs: O model Clinica será PK em todas as outras Tabelas, porque um Consultor não pode
+ver os dados do outro, naturalmente. Então, nos Lists, dropdown, etc, só pode aparecer suas respectivas
+Clinicas. Você pode me ajudar nessa parada? Se sim, já te envio o 1o Model Clinica, ok?
