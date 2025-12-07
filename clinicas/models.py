@@ -38,16 +38,19 @@ class Clinica(models.Model):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name='clinicas'   # importante!
+        related_name='clinicas'
     )
-    nome = UpperCharField('Clínica',max_length=64, blank=False, null=False, unique=True)
-    cep  = models.CharField('CEP' ,max_length=9, blank=True, null=True)
-    logradouro = UpperCharField('Logradouro',max_length=64, blank=True, null=True)
+    nome        = UpperCharField('Clínica',max_length=64, blank=False, null=False, unique=True)
+    responsavel = UpperCharField('Responsável',max_length=64, blank=True, null=True)
+
+    cep         = models.CharField('CEP' ,max_length=9, blank=True, null=True)
+    logradouro  = UpperCharField('Logradouro',max_length=64, blank=True, null=True)
     complemento = UpperCharField('Complemento', max_length=32, blank=True, null=True)
-    bairro = UpperCharField('Bairro', max_length=64, blank=True, null=True)
-    localidade = UpperCharField('Cidade', max_length=64, blank=True, null=True)
-    uf = UpperCharField('Estado',max_length=2, blank=True, null=True)
-    status = models.CharField('Status', max_length=20, choices=STATUS_CHOICES, default='ativa')
+    bairro      = UpperCharField('Bairro', max_length=64, blank=True, null=True)
+    localidade  = UpperCharField('Cidade', max_length=64, blank=True, null=True)
+    uf          = UpperCharField('Estado',max_length=2, blank=True, null=True)
+
+    status      = models.CharField('Status', max_length=20, choices=STATUS_CHOICES, default='ativa')
     data_criacao = models.DateTimeField(default=timezone.now)
     data_atualizacao = models.DateTimeField(auto_now=True)
 
@@ -296,8 +299,8 @@ class Sala(models.Model):
         related_name='salas'  # ← esse pode ficar "salas"
     )
 
-    numero = UpperCharField("Nro Sala", max_length=20)
-    nome = UpperCharField("Nome Sala", max_length=100, blank=True, null=True)
+    numero = UpperCharField("Nro Sala", max_length=16)
+    nome = UpperCharField("Nome Sala", max_length=64, blank=True, null=True)
     cor = UpperCharField("Cor no Agendamento", max_length=7, default="#007bff")
     status = models.CharField('Status', max_length=20, choices=STATUS_CHOICES, default='ativa')
 
@@ -311,7 +314,8 @@ class Sala(models.Model):
         unique_together = ('clinica', 'numero')
 
     def __str__(self):
-        return f"Sala {self.numero} - {self.clinica.nome}"
+        #return f"Sala {self.numero} - {self.clinica.nome}"
+        return f"{self.nome}"
 
 # Cálculos
 

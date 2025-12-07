@@ -3,9 +3,12 @@ from pyexpat.errors      import messages
 from django.contrib      import admin
 from import_export.admin import ImportExportModelAdmin
 from django              import forms
+import                          openpyxl
+from django.http         import HttpResponse
 
 # Models da APP Clinicas
-from .models             import *
+from clinicas.models     import *
+
 
 #========================================
 class ClinicaAdminBase(admin.ModelAdmin):
@@ -50,8 +53,8 @@ class ClinicaAdminBase(admin.ModelAdmin):
 #====================================    
 class ClinicaAdmin(admin.ModelAdmin):
 
-    list_display = ('nome', 'localidade', 'cep', 'status',) # 'user', 'data_criacao')
-    list_filter = ('status', 'uf')
+    list_display = ('nome', 'responsavel', 'localidade', 'cep', 'status',) # 'user', 'data_criacao')
+    #list_filter = ('status', 'uf')
     search_fields = ('nome', 'logradouro', 'bairro', 'localidade', 'cep')
     ordering = ('localidade', 'uf', 'nome',)
 
@@ -62,6 +65,7 @@ class ClinicaAdmin(admin.ModelAdmin):
         ('Dados da Clínica', {
             'fields': (
                 'nome',
+                'responsavel',
                 'status',
             )
         }),
@@ -116,19 +120,64 @@ class ClinicaAdmin(admin.ModelAdmin):
     cidade_estado.short_description = 'Cidade/UF'
 
 admin.site.register(Clinica, ClinicaAdmin)
+#=========================================
 
 
-#=========================
-from django.contrib import admin
-from .models import Parametro, Clinica
+# Expotar para Excel: Model Parametro
+#====================================
+
+def exportar_parametro_xlsx(modeladmin, request, queryset):
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Parametros"
+
+    # Cabeçalho
+    ws.append(["Codigo", "Valor", "Descrição", "Clínica"])
+
+    # Linhas
+    for obj in queryset:
+        ws.append([obj.codigo, obj.valor, obj.descricao, obj.clinica.nome])
+
+    response = HttpResponse(
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    response["Content-Disposition"] = 'attachment; filename="parametros.xlsx"'
+
+    wb.save(response)
+
+    return response
+
+exportar_parametro_xlsx.short_description = "Export Excel"
+#================================================================
 
 
 class ParametroAdmin(admin.ModelAdmin):
 
     list_display = ('codigo', 'valor', 'descricao', 'clinica',)
     search_fields = ('codigo', 'descricao', 'valor')
-    list_filter = ('clinica',)
+    #list_filter = ('clinica',)
     ordering = ('clinica__nome', 'codigo')
+
+    actions = [exportar_parametro_xlsx]  # adiciona action normal
+    change_list_template = "admin/parametros_xls.html"
+
+# ---------------------------------------------
+# 4. Exporta TODOS os registros da lista (sem precisar selecionar)
+# ---------------------------------------------
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        # Remove a action padrão do admin (que exige seleção)
+        if 'exportar_parametro_xlsx' in actions:
+            del actions['exportar_parametro_xlsx']
+        return actions
+
+    # Força a action a sempre usar todos os itens da queryset (a mágica!)
+    def changelist_view(self, request, extra_context=None):
+        if 'action' in request.POST and request.POST['action'] == 'exportar_parametro_xlsx':
+            # Pega TODOS os objetos que o usuário pode ver (com filtro de clínica!)
+            queryset = self.get_queryset(request)
+            return exportar_parametro_xlsx(self, request, queryset)
+        return super().changelist_view(request, extra_context)
 
     # Campos readonly para não permitir troca de dono
     readonly_fields = []
@@ -173,21 +222,63 @@ class ParametroAdmin(admin.ModelAdmin):
         if obj:  # edição
             return ('clinica',)  # trava o campo
         return self.readonly_fields
-
-
+#==================================
 admin.site.register(Parametro, ParametroAdmin)
+#=============================================
 
 
+# Expotar para Excel: Model Categoria
+#====================================
 
-#-------------------------
-from django.contrib import admin
-from .models import Categoria, Clinica
+def exportar_categoria_xlsx(modeladmin, request, queryset):
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Categorias"
 
+    # Cabeçalho
+    ws.append(["Codigo", "Descrição", "Tipo", "clinica"])
 
+    # Linhas
+    for obj in queryset:
+        ws.append([obj.codigo, obj.descricao, obj.tipo, obj.clinica.nome])
+
+    response = HttpResponse(
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    response["Content-Disposition"] = 'attachment; filename="categorias.xlsx"'
+
+    wb.save(response)
+
+    return response
+
+exportar_categoria_xlsx.short_description = "Export Excel"
+#=========================================================
+
+#@admin.register(Categoria)
 class CategoriaAdmin(admin.ModelAdmin):
+    list_display = ("codigo", "descricao", "tipo", "clinica")
 
-    list_display = ('codigo', 'descricao', 'tipo', 'clinica')
-    list_filter = ('tipo', 'clinica')
+    actions = [exportar_categoria_xlsx]  # adiciona action normal
+    change_list_template = "admin/categorias_xls.html"
+
+# ---------------------------------------------
+# 4. Exporta TODOS os registros da lista (sem precisar selecionar)
+# ---------------------------------------------
+# 4. REMOVE A ACTION DO DROPDOWN (pra não confundir)
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        if 'exportar_categoria_xlsx' in actions:
+            del actions['exportar_categoria_xlsx']
+        return actions
+
+# 5. A MÁGICA: clica no botão → exporta TODAS as linhas da lista
+    def changelist_view(self, request, extra_context=None):
+        if 'action' in request.POST and request.POST['action'] == 'exportar_categoria_xlsx':
+            queryset = self.get_queryset(request)  # respeita filtro do usuário!
+            return exportar_categoria_xlsx(self, request, queryset)
+        return super().changelist_view(request, extra_context)
+
+    #list_filter = ('tipo', 'clinica')
     search_fields = ('codigo', 'descricao')
     ordering = ('clinica__nome', 'tipo', 'codigo')
 
@@ -234,7 +325,6 @@ class CategoriaAdmin(admin.ModelAdmin):
             return ('clinica',)
         return self.readonly_fields
 
-
 admin.site.register(Categoria, CategoriaAdmin)
 #=============================================
 
@@ -243,18 +333,6 @@ admin.site.register(Categoria, CategoriaAdmin)
 
 
 
-
-#-------------------------
-from django.contrib import admin
-from .models import Equipamento, Clinica
-
-
-from django.contrib import admin
-from .models import (
-    Sala, TipoSala, Equipamento,
-    CustoFixoSala, CustoVariavelSala
-)
-from clinicas.models import Clinica
 
 
 # ===========================================================
@@ -347,7 +425,7 @@ class CustoVariavelInline(admin.TabularInline):
 class TipoSalaAdmin(ClinicaFilterMixin, admin.ModelAdmin):
 
     list_display = ("tipo", "nome", "clinica", "status")
-    list_filter = ("status", "clinica")
+    #list_filter = ("status", "clinica")
     search_fields = ("tipo", "nome")
     ordering = ("tipo",)
 
@@ -361,17 +439,62 @@ class TipoSalaAdmin(ClinicaFilterMixin, admin.ModelAdmin):
     )
 
 
-# ===========================================================
-#   ADMIN: Equipamento
-# ===========================================================
+# Expotar para Excel: Model Parametro
+#====================================
 
-@admin.register(Equipamento)
+def exportar_equipamento_xlsx(modeladmin, request, queryset):
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Equipamentos"
+
+    # Cabeçalho
+    ws.append(["Codigo", "Descrição", "Clínica"])
+
+    # Linhas
+
+    for obj in queryset:
+        ws.append([obj.codigo, obj.descricao, obj.clinica.nome])
+
+    response = HttpResponse(
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    response["Content-Disposition"] = 'attachment; filename="equipamentos.xlsx"'
+
+    wb.save(response)
+
+    return response
+
+exportar_equipamento_xlsx.short_description = "Export Excel"
+#================================================================
+
+#@admin.register(Equipamento)
 class EquipamentoAdmin(ClinicaFilterMixin, admin.ModelAdmin):
 
-    list_display = ("codigo", "descricao", "fabricante", "status", "clinica", "dta_aquisicao")
-    list_filter = ("status", "clinica")
+    list_display = ("codigo", "descricao", "fabricante", "status", "clinica", "custo_dia", "custo_mes")
+    #list_filter = ("status", "clinica")
     search_fields = ("codigo", "descricao", "fabricante", "marca")
     ordering = ("codigo",)
+
+    actions = [exportar_equipamento_xlsx]  # adiciona action normal
+    change_list_template = "admin/equipamentos_xls.html"
+
+# ---------------------------------------------
+# 4. Exporta TODOS os registros da lista (sem precisar selecionar)
+# ---------------------------------------------
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        # Remove a action padrão do admin (que exige seleção)
+        if 'exportar_equipamento_xlsx' in actions:
+            del actions['exportar_equipamento_xlsx']
+        return actions
+
+    # Força a action a sempre usar todos os itens da queryset (a mágica!)
+    def changelist_view(self, request, extra_context=None):
+        if 'action' in request.POST and request.POST['action'] == 'exportar_equipamento_xlsx':
+            # Pega TODOS os objetos que o usuário pode ver (com filtro de clínica!)
+            queryset = self.get_queryset(request)
+            return exportar_equipamento_xlsx(self, request, queryset)
+        return super().changelist_view(request, extra_context)
 
     fieldsets = (
         ("Identificação", {
@@ -384,6 +507,8 @@ class EquipamentoAdmin(ClinicaFilterMixin, admin.ModelAdmin):
             "fields": ("vlr_aquisicao", "custo_dia", "custo_mes"),
         }),
     )
+admin.site.register(Equipamento, EquipamentoAdmin)
+#=================================================
 
 
 # ===========================================================
@@ -398,7 +523,7 @@ class SalaAdmin(ClinicaFilterMixin, admin.ModelAdmin):
     inlines = [CustoFixoInline, CustoVariavelInline]
 
     list_display = ("numero", "nome", "tipo", "clinica", "status")
-    list_filter = ("status", "clinica", "tipo")
+    #list_filter = ("status", "clinica", "tipo")
     search_fields = ("numero", "nome")
     ordering = ("numero",)
 
@@ -425,15 +550,10 @@ class SalaAdmin(ClinicaFilterMixin, admin.ModelAdmin):
 @admin.register(CustoFixoSala)
 class CustoFixoSalaAdmin(admin.ModelAdmin):
 
-    list_display = ("nome_item", "valor_mensal", "sala", "get_clinica", "mes_referencia", "ano_referencia")
-    list_filter = ("mes_referencia", "ano_referencia", "sala__clinica")
+    list_display = ("nome_item", "valor_mensal", "sala", "get_clinica", "get_mes", "get_ano")
+    #list_filter = ("mes_referencia", "ano_referencia", "sala__clinica")
     search_fields = ("nome_item", "sala__numero")
     ordering = ("ano_referencia", "mes_referencia", "nome_item")
-
-    # mostrar a clínica na list_display
-    def get_clinica(self, obj):
-        return obj.sala.clinica.nome
-    get_clinica.short_description = "Clínica"
 
     # FILTRA por clínica do consultor
     def get_queryset(self, request):
@@ -442,6 +562,19 @@ class CustoFixoSalaAdmin(admin.ModelAdmin):
             return qs
         return qs.filter(sala__clinica__user=request.user)
 
+    # mostrar a clínica na list_display
+    def get_clinica(self, obj):
+        return obj.sala.clinica.nome,
+    get_clinica.short_description = "Clínica"
+
+    def get_mes(self, obj):
+            return obj.mes_referencia
+    get_mes.short_description = "Mes Ref."
+
+    def get_ano(self, obj):
+            return obj.ano_referencia
+    get_ano.short_description = "Ano Ref."
+    
     # dropdown de Sala só mostra as Salas do consultor
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         if db_field.name == "sala" and not request.user.is_superuser:
@@ -452,24 +585,32 @@ class CustoFixoSalaAdmin(admin.ModelAdmin):
 @admin.register(CustoVariavelSala)
 class CustoVariavelSalaAdmin(admin.ModelAdmin):
 
-    list_display = ("nome_item", "valor_mensal", "sala", "get_clinica", "mes_referencia", "ano_referencia")
-    list_filter = ("mes_referencia", "ano_referencia", "sala__clinica")
+    list_display = ("nome_item", "valor_mensal", "sala", "get_clinica", "get_mes", "get_ano")
+    #list_filter = ("mes_referencia", "ano_referencia", "sala__clinica")
     search_fields = ("nome_item", "sala__numero")
     ordering = ("ano_referencia", "mes_referencia", "nome_item")
 
-    # mostrar clínica
-    def get_clinica(self, obj):
-        return obj.sala.clinica.nome
-    get_clinica.short_description = "Clínica"
-
-    # FILTRA corretamente
+    # FILTRA por clínica do consultor
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         if request.user.is_superuser:
             return qs
         return qs.filter(sala__clinica__user=request.user)
 
-    # dropdown de Sala só da clínica do consultor
+    # mostrar a clínica na list_display
+    def get_clinica(self, obj):
+        return obj.sala.clinica.nome,
+    get_clinica.short_description = "Clínica"
+
+    def get_mes(self, obj):
+            return obj.mes_referencia
+    get_mes.short_description = "Mes Ref."
+
+    def get_ano(self, obj):
+            return obj.ano_referencia
+    get_ano.short_description = "Ano Ref."
+    
+    # dropdown de Sala só mostra as Salas do consultor
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         if db_field.name == "sala" and not request.user.is_superuser:
             kwargs["queryset"] = Sala.objects.filter(clinica__user=request.user)
@@ -585,7 +726,7 @@ class ProcedimentoAdmin(admin.ModelAdmin):
 @admin.register(Convenio)
 class ConvenioAdmin(admin.ModelAdmin):
     list_display = ('nome', 'clinica_nome', 'fator_reajuste', 'data_atualizacao')
-    list_filter = ('clinica__nome',)
+    #list_filter = ('clinica__nome',)
     search_fields = ('nome', 'clinica__nome')
 
     def clinica_nome(self, obj):
