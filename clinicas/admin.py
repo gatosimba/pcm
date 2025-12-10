@@ -47,16 +47,70 @@ class ClinicaAdminBase(admin.ModelAdmin):
 
 
 
+# Expotar para Excel: Model Clínica
+#==================================
+
+def exportar_clinica_xlsx(modeladmin, request, queryset):
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Clínicas"
+
+    # Cabeçalho
+    ws.append(["Clínica", "Responsável", "Email", "Whatszap", "Cidade/UF", "Status"])
+
+    # Linhas
+    for obj in queryset:
+        cidade_uf = f"{obj.localidade or ''}/{obj.uf or ''}"
+        ws.append([obj.nome, obj.responsavel, obj.email, obj.zap, cidade_uf, obj.status])
+
+    response = HttpResponse(
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    response["Content-Disposition"] = 'attachment; filename="clinicas.xlsx"'
+
+    wb.save(response)
+
+    return response
+
+exportar_clinica_xlsx.short_description = "Export Excel"
+#=========================================================
 
 
 
 #====================================    
 class ClinicaAdmin(admin.ModelAdmin):
 
-    list_display = ('nome', 'responsavel', 'localidade', 'cep', 'status',) # 'user', 'data_criacao')
+    # ---------------------------------------
+    # Função auxiliar p/ exibir cidade/estado
+    # ---------------------------------------
+    def cidade_estado(self, obj):
+        return f"{obj.localidade or ''}/{obj.uf or ''}"
+    cidade_estado.short_description = 'Cidade/UF'
+
+    list_display = ('nome', 'responsavel', 'email', 'zap', 'cidade_estado', 'cep', 'status',) # 'user', 'data_criacao')
     #list_filter = ('status', 'uf')
     search_fields = ('nome', 'logradouro', 'bairro', 'localidade', 'cep')
     ordering = ('localidade', 'uf', 'nome',)
+
+    actions = [exportar_clinica_xlsx]  # adiciona action normal
+    change_list_template = "admin/clinicas_xls.html"
+
+# ----------------------------------------------------------------
+# 4. Exporta TODOS os registros da lista (sem precisar selecionar)
+# ----------------------------------------------------------------
+# 4. REMOVE A ACTION DO DROPDOWN (pra não confundir)
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        if 'exportar_clinica_xlsx' in actions:
+            del actions['exportar_clinica_xlsx']
+        return actions
+
+# 5. A MÁGICA: clica no botão → exporta TODAS as linhas da lista
+    def changelist_view(self, request, extra_context=None):
+        if 'action' in request.POST and request.POST['action'] == 'exportar_clinica_xlsx':
+            queryset = self.get_queryset(request)  # respeita filtro do usuário!
+            return exportar_clinica_xlsx(self, request, queryset)
+        return super().changelist_view(request, extra_context)
 
     # Impede que o usuário troque o "user" no admin
     readonly_fields = ('user', 'data_criacao', 'data_atualizacao')
@@ -69,6 +123,14 @@ class ClinicaAdmin(admin.ModelAdmin):
                 'status',
             )
         }),
+
+        ('Contato', {
+            'fields': (
+                'email',
+                'zap',
+            )
+        }),
+
         ('Endereço', {
             'fields': (
                 'cep',
@@ -79,6 +141,7 @@ class ClinicaAdmin(admin.ModelAdmin):
                 'uf',
             )
         }),
+
         ('Controle', {
             'fields': (
                 'user',
@@ -112,12 +175,6 @@ class ClinicaAdmin(admin.ModelAdmin):
 
         super().save_model(request, obj, form, change)
 
-    # --------------------------
-    # Função auxiliar p/ exibir cidade/estado
-    # --------------------------
-    def cidade_estado(self, obj):
-        return f"{obj.localidade or ''}/{obj.uf or ''}"
-    cidade_estado.short_description = 'Cidade/UF'
 
 admin.site.register(Clinica, ClinicaAdmin)
 #=========================================
@@ -226,7 +283,104 @@ class ParametroAdmin(admin.ModelAdmin):
 admin.site.register(Parametro, ParametroAdmin)
 #=============================================
 
+# Expotar para Excel: Model Categoria
+#====================================
 
+def exportar_tipospessoa_xlsx(modeladmin, request, queryset):
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Tipos de Pessoa"
+
+    # Cabeçalho
+    ws.append(["Pessoa", "Especialidade", "Tipo", "Clínica"])
+
+    # Linhas
+    for obj in queryset:
+        ws.append([obj.pessoa, obj.especialidade, obj.tipo, obj.clinica.nome])
+
+    response = HttpResponse(
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    response["Content-Disposition"] = 'attachment; filename="tipospessoa.xlsx"'
+
+    wb.save(response)
+
+    return response
+
+exportar_tipospessoa_xlsx.short_description = "Export Excel"
+#=========================================================
+
+class TipoPessoaAdmin(admin.ModelAdmin):
+    list_display = ("pessoa", "especialidade", "tipo", "clinica")
+
+    actions = [exportar_tipospessoa_xlsx]  # adiciona action normal
+    change_list_template = "admin/tipospessoa_xls.html"
+
+# 4. REMOVE A ACTION DO DROPDOWN (pra não confundir)
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        if 'exportar_tipospessoa_xlsx' in actions:
+            del actions['exportar_tipospessoa_xlsx']
+        return actions
+
+# 5. A MÁGICA: clica no botão → exporta TODAS as linhas da lista
+    def changelist_view(self, request, extra_context=None):
+        if 'action' in request.POST and request.POST['action'] == 'exportar_tipospessoa_xlsx':
+            queryset = self.get_queryset(request)  # respeita filtro do usuário!
+            return exportar_tipospessoa_xlsx(self, request, queryset)
+        return super().changelist_view(request, extra_context)
+
+    #list_filter = ('tipo', 'clinica')
+    search_fields = ('pessoa', 'tipo')
+    ordering = ('pessoa', 'clinica__nome', 'tipo')
+
+    readonly_fields = []
+
+    fieldsets = (
+        ('Identificação', {
+            'fields': ('clinica', 'pessoa')
+        }),
+        ('Informações', {
+            'fields': ('especialidade', 'tipo')
+        }),
+    )
+    # ---------------------------------------------
+    # 1. Filtrar por usuário logado (multi-tenant)
+    # ---------------------------------------------
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+
+        if request.user.is_superuser:
+            return qs
+
+        return qs.filter(clinica__user=request.user)
+
+    # ---------------------------------------------
+    # 2. Dropdown de clínica só mostra as do consultor
+    # ---------------------------------------------
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+
+        if db_field.name == "clinica":
+            if request.user.is_superuser:
+                kwargs["queryset"] = Clinica.objects.all()
+            else:
+                kwargs["queryset"] = Clinica.objects.filter(user=request.user)
+
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+    # ---------------------------------------------
+    # 3. Impede trocar a clínica após criar o registro
+    # ---------------------------------------------
+    def get_readonly_fields(self, request, obj=None):
+        if obj:
+            return ('clinica',)
+        return self.readonly_fields
+
+admin.site.register(TipoPessoa, TipoPessoaAdmin)
+#===============================================
+
+
+#====================================
 # Expotar para Excel: Model Categoria
 #====================================
 
@@ -236,7 +390,7 @@ def exportar_categoria_xlsx(modeladmin, request, queryset):
     ws.title = "Categorias"
 
     # Cabeçalho
-    ws.append(["Codigo", "Descrição", "Tipo", "clinica"])
+    ws.append(["Codigo", "Descrição", "Tipo", "Clínica"])
 
     # Linhas
     for obj in queryset:
@@ -332,9 +486,6 @@ admin.site.register(Categoria, CategoriaAdmin)
 
 
 
-
-
-
 # ===========================================================
 #   MIXIN UNIVERSAL — Filtra tudo pela Clínica do consultor
 # ===========================================================
@@ -421,10 +572,9 @@ class CustoVariavelInline(admin.TabularInline):
 #   ADMIN: TipoSala
 # ===========================================================
 
-@admin.register(TipoSala)
 class TipoSalaAdmin(ClinicaFilterMixin, admin.ModelAdmin):
 
-    list_display = ("tipo", "nome", "clinica", "status")
+    list_display = ("tipo", "nome", "observacao", "clinica", "status")
     #list_filter = ("status", "clinica")
     search_fields = ("tipo", "nome")
     ordering = ("tipo",)
@@ -437,6 +587,8 @@ class TipoSalaAdmin(ClinicaFilterMixin, admin.ModelAdmin):
             "fields": ("observacao",),
         }),
     )
+admin.site.register(TipoSala, TipoSalaAdmin)
+#===========================================
 
 
 # Expotar para Excel: Model Parametro
@@ -522,7 +674,9 @@ class SalaAdmin(ClinicaFilterMixin, admin.ModelAdmin):
 
     inlines = [CustoFixoInline, CustoVariavelInline]
 
-    list_display = ("numero", "nome", "tipo", "clinica", "status")
+#    calcular_custo_hora.short_description = "Custo Hora"
+
+    list_display = ("numero", "nome", "tipo", "clinica", "calcular_custo_hora",  "status")
     #list_filter = ("status", "clinica", "tipo")
     search_fields = ("numero", "nome")
     ordering = ("numero",)
@@ -673,40 +827,12 @@ def get_clinica_queryset(request):
                 pass
     return qs.distinct()
 
-"""
-# ====================== FUNÇÃO MÁGICA QUE RESOLVE TUDO ======================
-def get_categoria_queryset(request):
-    #Retorna queryset de categorias filtradas por usuário (com edição funcionando)
-    if request.user.is_superuser:
-        return Categoria.objects.all()
-    
-    qs = Categoria.objects.filter(user=request.user)
-    
-    # Se estiver editando um objeto, garante que a Categoria atual apareça no dropdown
-    if hasattr(request, 'resolver_match'):
-        obj_id = request.resolver_match.kwargs.get('object_id')
-        if obj_id:
-            try:
-                # Tenta pegar do objeto sendo editado (qualquer model que tenha Categoria)
-                from django.apps import apps
-                for model in [Procedimento, Convenio, TabelaPreco, HistoricoPreco, ItemCusto]:
-                    try:
-                        obj = model.objects.get(pk=obj_id)
-                        if hasattr(obj, 'categoria') and obj.categoria not in qs:
-                            qs = qs | Categoria.objects.filter(pk=obj.categoria.pk)
-                            break
-                    except:
-                        continue
-            except:
-                pass
-    return qs.distinct()
-"""
 
 # ====================== PROCEDIMENTO ======================
 @admin.register(Procedimento)
 class ProcedimentoAdmin(admin.ModelAdmin):
     list_display = ('codigo', 'nome', 'clinica_nome', 'categoria', 'status')
-    list_filter = ('clinica__nome', 'categoria', 'status')
+    #list_filter = ('clinica__nome', 'categoria', 'status')
     search_fields = ('codigo', 'nome', 'clinica__nome')
     ordering = ('clinica__nome', 'nome')
 
@@ -720,10 +846,28 @@ class ProcedimentoAdmin(admin.ModelAdmin):
             kwargs["queryset"] = get_clinica_queryset(request)
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
+    # Impede que o usuário troque o "user" no admin
+    readonly_fields = ('data_criacao', 'data_atualizacao')
+
+    fieldsets = (
+        ('Identificação', {
+            'fields': ('clinica', 'codigo', 'nome')
+        }),
+        ('Informações', {
+            'fields': ('categoria', 'descricao', 'tempo_estimado')
+        }),
+        ('Controle', {
+            'fields': (
+                'data_criacao',
+                'data_atualizacao',
+            )
+        }),
+
+    )
+
 
 
 # ====================== CONVÊNIO ======================
-@admin.register(Convenio)
 class ConvenioAdmin(admin.ModelAdmin):
     list_display = ('nome', 'clinica_nome', 'fator_reajuste', 'data_atualizacao')
     #list_filter = ('clinica__nome',)
@@ -738,12 +882,14 @@ class ConvenioAdmin(admin.ModelAdmin):
             kwargs["queryset"] = get_clinica_queryset(request)
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
+admin.site.register(Convenio, ConvenioAdmin)
+#=================================================
 
 # ====================== TABELA DE PREÇO ======================
-@admin.register(TabelaPreco)
+#
 class TabelaPrecoAdmin(admin.ModelAdmin):
     list_display = ('procedimento', 'convenio', 'clinica_nome', 'preco_venda', 'margem_efetiva', 'status_margem')
-    list_filter = ('clinica__nome', 'convenio__nome', 'status_margem')
+    #list_filter = ('clinica__nome', 'convenio__nome', 'status_margem')
     search_fields = ('procedimento__nome', 'convenio__nome', 'clinica__nome')
 
     def clinica_nome(self, obj):
@@ -755,14 +901,55 @@ class TabelaPrecoAdmin(admin.ModelAdmin):
             kwargs["queryset"] = get_clinica_queryset(request)
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
+admin.site.register(TabelaPreco, TabelaPrecoAdmin)
+#=================================================
+
 
 # ====================== ITEM CUSTO ======================
-@admin.register(ItemCusto)
+#
 class ItemCustoAdmin(admin.ModelAdmin):
     list_display = ('procedimento', 'nome', 'clinica_nome', 'quantidade', 'custo_total_item')
-    list_filter = ('clinica__nome', 'categoria_custo')
     search_fields = ('nome', 'procedimento__nome')
 
+    # -------------------------
+    # MOSTRAR SOMENTE DO CONSULTOR LOGADO
+    # -------------------------
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.filter(clinica__user=request.user)
+
+    # -------------------------
+    # FILTRAR OS DROPDOWNS
+    # -------------------------
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+
+        # Filtrar Clinicas do consultor logado
+        if db_field.name == "clinica":
+            kwargs["queryset"] = Clinica.objects.filter(user=request.user)
+
+        # Filtrar Procedimentos só das clínicas do consultor
+        if db_field.name == "procedimento":
+            kwargs["queryset"] = Procedimento.objects.filter(
+                clinica__user=request.user
+            )
+
+        # Filtrar Categorias só das clínicas do consultor
+        if db_field.name == "categoria_custo":
+            kwargs["queryset"] = Categoria.objects.filter(
+                clinica__user=request.user
+            )
+
+        # Filtrar Parâmetros só das clínicas do consultor
+        if db_field.name == "referencia_parametro":
+            kwargs["queryset"] = Parametro.objects.filter(
+                clinica__user=request.user
+            )
+
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+    # -------------------------
+    # CAMPOS AUXILIARES
+    # -------------------------
     def clinica_nome(self, obj):
         return obj.clinica.nome
     clinica_nome.short_description = "Clínica"
@@ -772,17 +959,15 @@ class ItemCustoAdmin(admin.ModelAdmin):
         return f"R$ {total:,.2f}"
     custo_total_item.short_description = "Custo Total"
 
-    def formfield_for_foreignkey(self, db_field, request, **kwargs):
-        if db_field.name == "clinica":
-            kwargs["queryset"] = get_clinica_queryset(request)
-        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+#=============================================
+admin.site.register(ItemCusto, ItemCustoAdmin)
 
 
 # ====================== HISTÓRICO PREÇO ======================
-@admin.register(HistoricoPreco)
+#
 class HistoricoPrecoAdmin(admin.ModelAdmin):
     list_display = ('tabela_preco', 'clinica_nome', 'preco_venda_anterior', 'data_alteracao')
-    list_filter = ('clinica__nome', 'data_alteracao')
+    #list_filter = ('clinica__nome', 'data_alteracao')
     readonly_fields = ('data_alteracao',)
 
     def clinica_nome(self, obj):
@@ -793,3 +978,6 @@ class HistoricoPrecoAdmin(admin.ModelAdmin):
         if db_field.name == "clinica":
             kwargs["queryset"] = get_clinica_queryset(request)
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
+    
+admin.site.register(HistoricoPreco, HistoricoPrecoAdmin)
+#=======================================================

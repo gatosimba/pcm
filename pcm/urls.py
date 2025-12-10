@@ -18,6 +18,7 @@ from django.contrib import admin
 from django.urls import path, include
 
 urlpatterns = [
+    #path('jet/', include(('jet.urls', 'jet'))),  # sem namespace
     path('admin/', admin.site.urls),
     path('', include('clinicas.urls')),
 ]

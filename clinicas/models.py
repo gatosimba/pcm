@@ -1,26 +1,21 @@
-from django.db import models
-from django.conf import settings   # ← essa é a forma padrão e mais segura
+from django.db        import models
+from django.conf      import settings
+from django.conf      import settings
+from django.utils     import timezone
+from django.contrib   import admin
+from decimal          import Decimal
+from django.db.models import Sum
+
+from django.core.validators     import MinValueValidator, MaxValueValidator
+from django.utils.translation   import gettext_lazy as _
+from django.core.exceptions     import ValidationError
 from django.contrib.auth.models import User
-from django.utils.translation import gettext_lazy as _
-
-from django.utils import timezone
-from django.core.exceptions import ValidationError
-from django.contrib import admin
-
 
 import requests
 import logging
 import re
 
-#from pcm import settings
-
 logger = logging.getLogger(__name__)
-
-from django.db import models
-from django.conf import settings
-
-
-
 
 #=====================================
 class UpperCharField(models.CharField):
@@ -40,27 +35,34 @@ class Clinica(models.Model):
         on_delete=models.CASCADE,
         related_name='clinicas'
     )
-    nome        = UpperCharField('Clínica',max_length=64, blank=False, null=False, unique=True)
-    responsavel = UpperCharField('Responsável',max_length=64, blank=True, null=True)
-
-    cep         = models.CharField('CEP' ,max_length=9, blank=True, null=True)
-    logradouro  = UpperCharField('Logradouro',max_length=64, blank=True, null=True)
-    complemento = UpperCharField('Complemento', max_length=32, blank=True, null=True)
-    bairro      = UpperCharField('Bairro', max_length=64, blank=True, null=True)
-    localidade  = UpperCharField('Cidade', max_length=64, blank=True, null=True)
-    uf          = UpperCharField('Estado',max_length=2, blank=True, null=True)
-
-    status      = models.CharField('Status', max_length=20, choices=STATUS_CHOICES, default='ativa')
-    data_criacao = models.DateTimeField(default=timezone.now)
-    data_atualizacao = models.DateTimeField(auto_now=True)
+    nome        = UpperCharField(_('Clínica'),max_length=64, blank=False, null=False, unique=True)
+    responsavel = UpperCharField(_('Responsável'),max_length=64, blank=True, null=True)
+    email       = models.EmailField(_('E-mail'), blank=True, null=True)
+    zap         = models.CharField(_('Whatszap'), blank=True, null=True)
+# Campos do Endereço Completo
+    cep         = models.CharField(_('CEP') ,max_length=9, blank=True, null=True)
+    logradouro  = UpperCharField(_('Logradouro'),max_length=64, blank=True, null=True)
+    complemento = UpperCharField(_('Complemento'), max_length=32, blank=True, null=True)
+    bairro      = UpperCharField(_('Bairro'), max_length=64, blank=True, null=True)
+    localidade  = UpperCharField(_('Cidade'), max_length=64, blank=True, null=True)
+    uf          = UpperCharField(_('Estado'),max_length=2, blank=True, null=True)
+#================
+    status      = models.CharField(_('Status'), max_length=20, choices=STATUS_CHOICES, default='ativa')
+    data_criacao = models.DateTimeField(_('Data Criação'), default=timezone.now)
+    data_atualizacao = models.DateTimeField(_('Data Atualização'), auto_now=True)
 
     class Meta:
         db_table = 'clinicas'
         verbose_name = 'Clínica'
-        verbose_name_plural = 'Clínicas'
+        verbose_name_plural = '(C1) Clínicas'
 
     def __str__(self):
         return f'{self.nome}'
+
+    def cidade_estado(self, obj):
+        cidade_uf = f"{obj.localidade or ''}/{obj.uf or ''}"
+        return f"{obj.localidade or ''}/{obj.uf or ''}"
+    cidade_estado.short_description = 'Cidade/UF'
 
 #-- Buscar o CEP para preenchimento do endereço
     def save(self, *args, **kwargs):
@@ -111,9 +113,6 @@ class Clinica(models.Model):
         }
 
 
-# core/models.py
-from django.conf import settings
-
 class PerfilUsuario(models.Model):
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
@@ -147,18 +146,40 @@ class Parametro(models.Model):
 
     class Meta:
         verbose_name = "Parâmetro"
-        verbose_name_plural = "Parâmetros"
+        verbose_name_plural = "(C2) Parâmetros"
         # ← ÚNICO POR CLÍNICA, não global!
         unique_together = ('clinica', 'codigo')
-"""
-    @classmethod
-    def get_int(cls, codigo, default=0):
-        valor = cls.get_valor(codigo, default=str(default))
-        try:
-            return int(float(valor))  # aceita "22", "22.0", 22, 22.0
-        except:
-            return int(default) if str(default).isdigit() else 0
-"""
+
+#------------------------------
+class TipoPessoa(models.Model):
+#------------------------------
+#     
+    TIPO_CHOICES = [
+        ('saude', 'Saúde'),
+        ('terceiro', 'Terceirizado'),
+        ('administrativo', 'Administrativo'),
+    ]
+    clinica = models.ForeignKey(
+        Clinica,
+        on_delete=models.CASCADE,
+        related_name='tipospessoa'
+    )
+    pessoa = UpperCharField(_("Tipo de Pessoa"), max_length=64,
+        help_text=_("Informe o Tipo do Profissional. Obrigatório!"))
+    especialidade = UpperCharField(_("Especialidade"),  max_length=64, blank=True, null=True,
+        help_text=_("Informe a Especialidade do Profissional. Opciona!"))
+    tipo = models.CharField('Tipo', max_length=20, choices=TIPO_CHOICES, 
+        blank=False, null=False, default='saude',
+        help_text=_("Escolha a Função do Profissional. Default Saúde!"))
+
+    def __str__(self):
+        return f"{self.pessoa} - {self.clinica.nome}"
+
+    class Meta:
+        verbose_name = "Tipos de Pessoa"
+        verbose_name_plural = "Tipos de Pessoa"
+        # ← ÚNICO POR CLÍNICA, não global!
+        unique_together = ('clinica', 'pessoa')
 
 #-----------------------------
 class Categoria(models.Model):
@@ -180,11 +201,12 @@ class Categoria(models.Model):
     class Meta:
         db_table = 'categorias'
         verbose_name = 'Categoria'
-        verbose_name_plural = 'Categorias'
+        verbose_name_plural = '(C3) Categorias'
         unique_together = ('clinica', 'codigo')
 
     def __str__(self):
-        return f'{self.codigo} {self.descricao} {self.clinica} ({self.get_tipo_display()})'
+        #return f'{self.codigo} {self.descricao} {self.clinica} ({self.get_tipo_display()})'
+        return f'{self.descricao} ( {self.get_tipo_display()}) - {self.clinica}'
 
     def to_dict(self):
         return {
@@ -214,7 +236,7 @@ class TipoSala(models.Model):
     class Meta:
         db_table = 'tipossala'
         verbose_name = 'Tipo de Sala'
-        verbose_name_plural = 'Tipos de Sala'
+        verbose_name_plural = '(S1) Tipos de Sala'
         unique_together = ('clinica', 'tipo')
 
     def __str__(self):
@@ -255,7 +277,7 @@ class Equipamento(models.Model):
     class Meta:
         db_table = 'equipamento'
         verbose_name = 'Equipamento'
-        verbose_name_plural = 'Equipamentos'
+        verbose_name_plural = '(C4) Equipamentos'
         unique_together = ('clinica', 'codigo')
 
     def __str__(self):
@@ -312,6 +334,11 @@ class Sala(models.Model):
 
     class Meta:
         unique_together = ('clinica', 'numero')
+        #db_table = 'sala'
+        verbose_name = 'Sala'
+        verbose_name_plural = '(S2) Salas'
+        unique_together = ('clinica', 'numero')
+
 
     def __str__(self):
         #return f"Sala {self.numero} - {self.clinica.nome}"
@@ -342,15 +369,12 @@ class Sala(models.Model):
         var  = self.custos_variaveis.filter(mes_referencia=mes, ano_referencia=ano)\
                                     .aggregate(s=Sum('valor_mensal'))['s'] or 0
 
-        #print(fixo, ' - ', var, ' - ', total_horas)
-
         resultado = (fixo + var) / total_horas
         res = round(float(resultado), 2)
-        #print('Resultado: ', res)
         return res   # ← TEM QUE RETORNAR SÓ O NÚMERO!
 
+    calcular_custo_hora.short_description = "Custo/Hora"
 
-from django.core.validators import MinValueValidator, MaxValueValidator
 
 # Deixo só o FK pra Sala:
 class CustoFixoSala(models.Model):
@@ -366,6 +390,9 @@ class CustoFixoSala(models.Model):
     )
     class Meta:
         unique_together = ('sala', 'nome_item', 'mes_referencia', 'ano_referencia')
+    #    db_table = 'custovariavelsala'
+        verbose_name = 'Custo Fixo Sala'
+        verbose_name_plural = '(S3) Custo Fixo Sala'
 
 # Deixo só o FK pra Sala:
 
@@ -383,12 +410,11 @@ class CustoVariavelSala(models.Model):
 
     class Meta:
         unique_together = ('sala', 'nome_item', 'mes_referencia', 'ano_referencia')
-
+    #    db_table = 'custovariavelsala'
+        verbose_name = 'Custo Variável Sala'
+        verbose_name_plural = '(S4) Custo Variável Sala'
 
 #-------------------- Novos Models
-# models.py
-from decimal import Decimal
-from django.core.validators import MinValueValidator
 
 #--------------------------------
 class Procedimento(models.Model):
@@ -400,9 +426,9 @@ class Procedimento(models.Model):
         related_name='procedimentos',
         verbose_name='Clínica'
     )
-    codigo = models.CharField('Código', max_length=20, unique=True, blank=False, null=False, default='Novo',
+    codigo    = UpperCharField('Código', max_length=20, unique=True, blank=False, null=False, default='Novo',
             help_text=_("Informe o Código do Procedimento. Obrigatório!"))
-    nome = models.CharField('Nome do Procedimento', max_length=200, blank=False, null=False,
+    nome      = UpperCharField('Nome do Procedimento', max_length=200, blank=False, null=False,
             help_text=_("Informe o Nome do Procedimento. Obrigatório!"))
     categoria = models.ForeignKey(
         'clinicas.Categoria',
@@ -414,35 +440,31 @@ class Procedimento(models.Model):
         verbose_name=_('Categoria'),
         help_text=_('Escolha a Categoria do Procedimento. Obrigatório!'),
     )
-    descricao = models.CharField('Descrição', max_length=256, blank=True, null=True,
+    descricao = UpperCharField('Descrição', max_length=256, blank=True, null=True,
             help_text=_("Informe a Descrição do Procedimento. Opcional!"))
     tempo_estimado = models.PositiveIntegerField(
-        null=True, blank=True, help_text="Tempo em minutos"
+        null=True, blank=True, help_text="Tempo em minutos!"
     )
     status = models.CharField(
         max_length=20,
         choices=[('ativo', 'Ativo'), ('inativo', 'Inativo')],
         default='ativo'
     )
-    data_criacao = models.DateTimeField(auto_now_add=True)
-    data_atualizacao = models.DateTimeField(auto_now=True)
+    #data_criacao = models.DateTimeField(auto_now_add=True)
+    #data_atualizacao = models.DateTimeField(auto_now=True)
+    data_criacao = models.DateTimeField(_('Data Criação'), default=timezone.now)
+    data_atualizacao = models.DateTimeField(_('Data Atualização'), auto_now=True)
 
     class Meta:
         unique_together = ('clinica', 'codigo')
         ordering = ['nome']
         verbose_name = _('Procedimento')
-        verbose_name_plural = _('Procedimentos')
+        verbose_name_plural = _('(P1) Procedimentos')
 
     def __str__(self):
         return f"[{self.codigo or 'S/N'}] {self.nome}"
+    
 
-    def calcular_custo_total(self):
-        """Soma todos os itens de custo (atualizados com parâmetros vinculados)"""
-        return sum(item.calcular_custo_total() for item in self.itens_custo.all())
-
-    def custo_total_formatado(self):
-        return f"R$ {self.calcular_custo_total():,.2f}"
-    custo_total_formatado.short_description = "Custo Total"
 
 #----------------------------
 class Convenio(models.Model):
@@ -454,9 +476,9 @@ class Convenio(models.Model):
         related_name='convenios',
         verbose_name=_('Clínica')
     )
-    nome = models.CharField('Nome', max_length=128,
+    nome      = UpperCharField('Nome', max_length=128,
             help_text=_("Informe o Nome do Convênio. Obrigatório!"))
-    descricao = models.CharField('Descrição', max_length=128, null=True, blank=True,
+    descricao = UpperCharField('Descrição', max_length=128, null=True, blank=True,
             help_text=_("Informe a Descrição do Convênio. Opcional!"))
     fator_reajuste = models.DecimalField('Fator de Reajuste',
         max_digits=5, decimal_places=4, default=Decimal('1.0000'),
@@ -466,7 +488,7 @@ class Convenio(models.Model):
 
     class Meta:
         verbose_name = _('Convênio')
-        verbose_name_plural = _('Convênios')
+        verbose_name_plural = _('(C5) Convênios')
         unique_together = ('clinica', 'nome')
 
     def __str__(self):
@@ -505,7 +527,7 @@ class TabelaPreco(models.Model):
     class Meta:
         unique_together = ('clinica', 'procedimento', 'convenio')
         verbose_name = 'Tabela de Preço'
-        verbose_name_plural = 'Tabelas de Preço'
+        verbose_name_plural = '(P2) Tabela de Preços'
 
     def __str__(self):
         return f"{self.procedimento} - {self.convenio} - R$ {self.preco_venda}"
@@ -583,11 +605,11 @@ class HistoricoPreco(models.Model):
     custo_total_anterior = models.DecimalField(max_digits=12, decimal_places=2)
     preco_venda_anterior = models.DecimalField(max_digits=12, decimal_places=2)
     data_alteracao = models.DateTimeField(auto_now_add=True)
-    motivo_alteracao = models.TextField(null=True, blank=True)
+    motivo_alteracao = UpperCharField('Motivo', max_length=128)
 
     class Meta:
         verbose_name = 'Histórico de Preço'
-        verbose_name_plural = 'Históricos de Preço'
+        verbose_name_plural = '(P3) Histórico de Preços'
         ordering = ['-data_alteracao']
 
     def __str__(self):
@@ -603,7 +625,6 @@ class ItemCusto(models.Model):
         related_name='itens_custo',
         verbose_name='Clínica'
     )
-     
     procedimento = models.ForeignKey(
         Procedimento,
         on_delete=models.CASCADE,
@@ -614,10 +635,9 @@ class ItemCusto(models.Model):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='itens_custo'
+        related_name='itens_custos'
     )
-    # models.py → dentro do ItemCusto
-
+    
     referencia_parametro = models.ForeignKey(
         'clinicas.Parametro',  # ou só Parametro se estiver no mesmo app
         on_delete=models.SET_NULL,
@@ -626,14 +646,24 @@ class ItemCusto(models.Model):
         related_name='itens_custo_referencia',
         help_text="Se preenchido, ignora custo_unitario e usa o valor atual do parâmetro"
     )
-    nome = models.CharField(max_length=100)
-    quantidade = models.DecimalField(
+    nome       = UpperCharField('Nome Ítem', max_length=32)
+    quantidade = models.DecimalField('Qtde Ítem',
         max_digits=10, decimal_places=4, default=Decimal('1.0000'),
         validators=[MinValueValidator(Decimal('0.0001'))]
     )
-    unidade_medida = models.CharField(max_length=20, blank=True, null=True)
+    unidade_medida = UpperCharField('Unid Medida', max_length=8, blank=True, null=True)
     custo_unitario = models.DecimalField(
         max_digits=12, decimal_places=4,
         help_text="Valor fixo OU será Sobrescrito"
     )
+
+    class Meta:
+        unique_together = ('clinica', 'nome')
+        verbose_name = 'Ítem de Custo'
+        verbose_name_plural = '(S5) Ítens de Custo'
+
+
+
+#aqui
+
 #-------------------- Fim -------------------------    

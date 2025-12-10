@@ -1,0 +1,44 @@
+{% extends "admin/change_list.html" %}
+{% load i18n admin_urls %}
+
+{% block object-tools-items %}
+    {{ block.super }}
+
+    <li>
+        <!-- BOTÃO QUE FUNCIONA DE VERDADE -->
+        <form id="export-form" method="post" style="display:inline;">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="exportar_clinica_xlsx">
+            <input type="hidden" name="select_across" value="1">
+            <input type="hidden" name="index" value="0">
+            <button type="submit" class="export-btn" 
+                    onclick="return showSubmitSelectedConfirmation(this.form, 'Exportar todos os itens para o Excel?')">
+                Export Excel
+            </button>
+        </form>
+    </li>
+
+    <style>
+        .export-btn {
+            background-color: #1976d2 !important;
+            color: white !important;
+            border: none !important;
+            border-radius: 9999px !important;
+            padding: 5px 20px !important;
+            font-weight: 500 !important;
+            cursor: pointer !important;
+            font-size: 14px !important;
+        }
+        .export-btn:hover { background-color: #1565c0 !important; }
+    </style>
+
+    <!-- Script mágico que o Django admin já tem -->
+    <script>
+        function showSubmitSelectedConfirmation(form, message) {
+            if (confirm(message)) {
+                form.submit();
+            }
+            return false;
+        }
+    </script>
+{% endblock %}
